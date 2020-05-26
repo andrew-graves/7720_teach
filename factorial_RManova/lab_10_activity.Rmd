@@ -1,0 +1,47 @@
+---
+title: "PSYC 7720 Lab" 
+subtitle: "Lab 10 Activity"
+author: "Andrew Graves, Department of Psychology, University of Virginia"
+output:
+  pdf_document: default
+---
+
+## Directions:
+
+A.	Download the angle_noise_data.csv. This is a two-factor within subjects design
+with two levels of the noise factor and three levels of the angle factor. In the data, abs represents the condition where noise is absent and pres represents where noise is present. The 0, 4, and 8 denote the three different angle conditions. The measurements in each cell are aggregated reaction times.
+B.	Answer the following questions and save the code you used in an R script.
+C.	You have until the end of lab to complete.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, eval = FALSE, warning = FALSE, message = FALSE, fig.height = 4)
+```
+
+```{r init}
+
+```
+
+## Questions:
+
+1. Convert the angle_noise_data from wide format to long format. Name the first column *id*, the second column *noise*, the third column *angle*, the fourth column *rt*, and the dataframe *long_data*. Print the head and the dimensions of the long data.
+
+```{r 1}
+
+```
+
+2. Ensure that the within-subjects conditions are appropriately implemented as qualitative and/or quantitative factors. Print the appropriate structure of *long_data* using str().
+
+```{r 2}
+```
+
+3. Run and interpret the results of the two-way factorial RM ANOVA using aov.
+
+```{r 3}
+
+```
+
+4. Run and interpret the results of the two-way factorial RM ANOVA using ezANOVA.
+
+```{r 4}
+ 
+```

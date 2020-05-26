@@ -1,0 +1,222 @@
+---
+title: "Lab 10"
+author: "Andrew Graves"
+date: "April 2/3 2020"
+output:
+  ioslides_presentation:
+    smaller: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.height = 3.5)
+```
+
+# Introduction to Factorial RM ANOVA in R
+
+## Load the data
+
+```{r load}
+library(tidyverse)
+library(ez)
+library(lme4)
+library(effects)
+
+# Making sure we have ANOVA-appropriate contrasts:
+options(contrasts = c("contr.sum","contr.poly"))
+
+# Data from the paper "Modeling the dynamics of recognition memory testing 
+# with a combined model of retrieval and decision making
+# doi: 10.17632/226zz69bk9.1
+# ----------
+# Manipulates list length between 24 and 96 items, 
+# normative word frequency (LF vs. HF), 
+# and the length of the retention interval.
+
+dat <- read_csv("exp1testing.csv") %>%
+  mutate_if(is.character, factor) %>%
+  mutate(subj = factor(subj),
+         RT = log(RT))
+```
+
+## Explore the data structure
+
+```{r str}
+glimpse(dat)
+```
+
+## Compute subject * condition aggregate means for Factorial RM ANOVA
+
+```{r agg}
+grp_dat <- dat %>%
+  group_by(subj, wf, length) %>%
+  summarize(mean_rt = mean(RT))
+
+glimpse(grp_dat)
+```
+
+# Factorial RM ANOVA on word frequency and list length
+
+## Use aov and Error for Factorial RM ANOVA
+
+```{r aov_fact}
+# Base r solution
+aov_fact <- aov(mean_rt ~ wf * length + 
+               Error(subj/(wf * length)), data = grp_dat)
+```
+
+## View aov solution
+
+```{r aov_fact_soln}
+summary(aov_fact)
+```
+
+## Use ezANOVA for Factorial RM ANOVA
+
+```{r ez_fact}
+# ez package solution (checks for violations of sphericity)
+# ----------
+ez_fact <- ezANOVA(data = grp_dat,
+                  dv = .(mean_rt),
+                  within = .(wf, length),
+                  wid = .(subj),
+                  detailed = TRUE
+        )
+ez_fact
+```
+
+## Use lmer (on aggregate data) for Factorial RM ANOVA
+
+```{r lmer_agg}
+set.seed(42)
+grp_lmer <- lmer(mean_rt ~ wf * length + 
+                (1|subj/wf) + (1|subj/length) + (1|subj/wf:length),
+                data = grp_dat,
+                control=lmerControl(check.nobs.vs.nRE="ignore",
+                check.nobs.vs.nlev = "ignore",
+                optimizer = "Nelder_Mead",
+                optCtrl = list(maxfun = 1e5)
+                   ))
+```
+
+## View the lmer aggregate solution
+
+```{r lmer_agg_soln}
+summary(grp_lmer)$coefficients
+anova(grp_lmer)
+```
+
+# Model the full data (trial-level) with lmer
+
+## Factorial RM ANOVA on trial-level data
+
+```{r lmer_fact}
+set.seed(42)
+full_lmer_fact <- lmer(RT ~ wf * length + (1|subj/wf) + (1|subj/length) +
+                  (1|subj/wf:length), data = dat)
+
+fit_all_fact <- allFit(full_lmer_fact)
+diff_opts_fact <- summary(fit_all_fact)
+
+set.seed(42)
+final_fact <- update(full_lmer_fact, 
+                     control = lmerControl(optimizer = "bobyqa",
+                                           optCtrl = list(maxfun = 2e6)))
+```
+
+## Messages from the various optimizer solutions
+
+```{r optim1}
+diff_opts_fact$msgs
+```
+
+## View fixed effects output
+
+```{r lmer_fact_res}
+summary(final_fact)$coefficients
+anova(final_fact)
+```
+
+## Plot the factorial lmer model
+
+```{r effects1}
+# allEffects is a function within the effects package: Extracts model parameters
+plot(allEffects(final_fact))
+```
+
+# Adding a between-subjects factor
+
+## Create an age factor (old = 0, young = 1)
+
+```{r age}
+subj <- grp_dat %>%
+  arrange(desc(mean_rt)) %>%
+  ungroup() %>%
+  select(subj) %>%
+  unique() %>%
+  filter(subj != 0)
+
+is_young <- rep(c(0, 1), each = nrow(subj) / 2) %>%
+  factor()
+joiner <- cbind(subj, is_young)
+head(joiner)
+
+age_dat <- dat %>%
+  inner_join(joiner, by = "subj")
+```
+
+## Fit the between-subjects factor (additive) in lmer
+
+```{r lmer_fact_bet}
+set.seed(42)
+full_lmer_fact_bet <- lmer(RT ~ wf * length + is_young + 
+                          (1|subj/wf) + (1|subj/length) + (1|subj/wf:length),
+                          data = age_dat)
+
+set.seed(42)
+fit_all_fact_bet <- allFit(full_lmer_fact_bet)
+diff_opts_fact_bet <- summary(fit_all_fact_bet)
+diff_opts_fact_bet$msgs
+
+set.seed(42)
+final_fact_bet <- update(full_lmer_fact_bet, 
+                     control = lmerControl(optimizer = "bobyqa",
+                                           optCtrl = list(maxfun = 2e6)))
+```
+
+## Model now incorporates age
+
+```{r effects2}
+plot(allEffects(final_fact_bet))
+```
+
+## Add between subjects factor (interactive) to aov
+
+```{r aov_fact_bet}
+age_grp_dat <- grp_dat %>%
+  inner_join(joiner, by = "subj") %>%
+  ungroup() %>%
+  mutate(subj = factor(subj))
+
+aov_fact_bet <- aov(mean_rt ~ wf * length * is_young + 
+               Error(subj/(wf * length)), data = age_grp_dat)
+```
+
+## Add between subjects factor (interactive) to ezANOVA
+
+```{r ez_fact_bet}
+ez_fact_bet <- ezANOVA(data = age_grp_dat,
+                  dv = mean_rt,
+                  within = .(wf, length),
+                  wid = subj,
+                  between = is_young
+)
+ez_fact_bet
+```
+
+# Now it's your turn!
+
+Download the in-class activity and answer the questions as best you can. 
+
+Collaborate with your peers to write code. 
+
+I am available for programming questions.
