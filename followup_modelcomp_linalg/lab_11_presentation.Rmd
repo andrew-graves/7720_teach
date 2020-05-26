@@ -1,0 +1,531 @@
+---
+title: "Lab 11"
+author: "Andrew Graves"
+date: "April 9/10 2020"
+output:
+  ioslides_presentation:
+    smaller: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.height = 3.5)
+```
+
+# Follow-up tests (univariate), model comparison (mixed-effects), and basic linear algebra operations
+
+## Load the data
+
+```{r load}
+# Same data from Lab 9 and Lab 10
+library(tidyverse)
+library(ez)
+library(lme4)
+library(effects)
+library(emmeans)
+
+# Making sure we have ANOVA-appropriate contrasts:
+options(contrasts = c("contr.sum","contr.poly"))
+
+# sleepstudy data from lme4 package
+data(sleepstudy)
+sleep <- sleepstudy %>%
+  mutate(Days = factor(sleepstudy$Days, ordered = TRUE))
+
+# Data from "Modeling the dynamics of recognition memory
+# testing with a combined model of retrieval and 
+# decision making
+mem_dat <- read_csv("exp1testing.csv") %>%
+  mutate_if(is.character, factor) %>%
+  mutate(subj = factor(subj),
+         RT = log(RT))
+```
+
+## Create an age factor (old = 0, young = 1)
+
+```{r age}
+# Compute subject * condition aggregate means
+grp_mem_dat <- mem_dat %>%
+  group_by(subj, wf, block) %>%
+  summarize(mean_rt = mean(RT))
+
+subj <- grp_mem_dat %>%
+  arrange(desc(mean_rt)) %>%
+  ungroup() %>%
+  select(subj) %>%
+  unique() %>%
+  filter(subj != 0)
+
+is_young <- rep(c(0, 1), each = nrow(subj) / 2) %>%
+  factor()
+joiner <- cbind(subj, is_young)
+
+age_dat <- mem_dat %>%
+  inner_join(joiner, by = "subj")
+```
+
+# Follow-up tests (univariate)
+
+## Specify the aov model
+
+```{r aov_fact}
+aov_fact <- aov(mean_rt ~ wf * block + 
+               Error(subj/(wf * block)), 
+               data = grp_mem_dat)
+```
+
+## View aov solution
+
+```{r aov_fact_soln}
+summary(aov_fact)
+```
+
+## Run follow-up tests on aov object
+
+```{r follow_up_aov}
+full <- emmeans(aov_fact, ~ block|wf)
+main_block <- emmeans(aov_fact, ~ block)
+main_wf <- emmeans(aov_fact, ~ wf)
+
+# If interaction is significant, test simple effects
+full_tests <- contrast(full, interaction = TRUE,
+                       method = "trt.vs.ctrl",
+                       adjust = "bonferroni")
+
+# If interaction is not significant, test contrasts of
+# interest at main effect
+block_test <- contrast(main_block, 
+                       method = "trt.vs.ctrl",
+                       ref = 4,
+                       adjust = "bonferroni")
+wf_test <- contrast(main_wf, 
+                    method = "trt.vs.ctrl", 
+                    adjust = "bonferroni")
+```
+
+## Interaction comparisons
+
+```{r int_comp}
+full_tests
+```
+
+## Block comparisons
+
+```{r block_comps}
+block_test
+```
+
+## Specify the ezANOVA model
+
+```{r ez_fact}
+# Specified type III sum of squares here
+ez_mod <- ezANOVA(data = sleep,
+                  dv = Reaction,
+                  within = Days,
+                  wid = Subject,
+                  type = 3,
+                  return_aov = TRUE,
+                  detailed = TRUE
+        )
+summary(ez_mod)
+```
+
+## Run follow-up tests on ez object
+
+```{r follow_up_ez}
+full <- emmeans(ez_mod$aov, ~ Days)
+
+all_pairs <- pairs(full, adjust = "bonferroni")
+
+poly_cont <- contrast(full, method = "poly",
+         adjust = "bonferroni")
+```
+
+## All ez pairwise comparisons
+
+```{r all_pairs}
+all_pairs
+```
+
+## Polynomial contrasts
+
+```{r poly_cont}
+poly_cont
+```
+
+## Specifying a subset of contrasts
+
+```{r subset}
+subset <- emmeans(ez_mod$aov, ~ Days, 
+        contr = list(
+        "linear" = contrasts(sleep$Days)[, 1],
+        "quadratic" = contrasts(sleep$Days)[, 2]
+        ), adjust = "bonferroni"
+  )
+subset$contrasts
+```
+
+## Plot the ez model
+
+```{r ez_plot}
+ez_plot <- ezPlot(
+  data = sleep,
+  dv = Reaction,
+  wid = Subject,
+  within = Days,
+  x = Days,
+  x_lab = "Days",
+  y_lab = "RT"
+  )
+
+# help(ez_plot) for specifying more complex plots
+```
+
+## RT increases as a function of Days
+
+```{r ez_show}
+ez_plot
+```
+
+# Model comparison using likelihoods with lmer
+
+## First we need to fit an lmer model
+
+```{r lmer_fact_res}
+full <- lmer(RT ~ block * is_young + (1|subj/block), 
+             REML = FALSE, data = age_dat)
+plot(allEffects(full), multiline = TRUE)
+```
+
+## AIC and BIC
+
+-AIC: Akaike information criterion ($k = 2$)
+
+-BIC: Bayesian information criterion ($k = \textrm{ln}(n)$)
+
+Let $\hat{L}$ be the maximum likelihood estimate of the model, $k$ the chosen penalization parameter, and $df$ the number of parameters in the fitted model.
+
+- The penalized likelihood function is expressed as follows
+
+$$-2\textrm{ln}(\hat{L}) + k*df$$
+
+By this formula, it is clear that lower values indicate evidence for "better" fit conditional on model complexity ($df$).
+
+Note that $-2\textrm{ln}(\hat{L})$ will never increase with the addition of parameters. In other words, adding parameters will always result in better fit.
+
+## Model comparison in R
+
+$$\textrm{BIC} = -2\textrm{ln}(\hat{L}) + \textrm{ln}(n)df$$
+$$\textrm{AIC} = -2\textrm{ln}(\hat{L}) + 2df$$
+```{r ic}
+# BIC (more conservative for n > 7)
+bic_by_hand <- -2 * as.numeric(logLik(full)) + 
+  log(nobs(full)) * attr(logLik(full), "df")
+
+# AIC (less conservative for n > 7)
+aic_by_hand <- -2 * as.numeric(logLik(full)) + 
+  2 * attr(logLik(full), "df")
+
+BIC(full) == bic_by_hand & AIC(full) == aic_by_hand
+```
+
+## Sample size and penalty parameter with BIC
+
+```{r plot_logs}
+logs <- data.frame(samp = seq(1, 1e5),
+                        log_samp = log(seq(1, 1e5)))
+
+plot_logs <- logs %>%
+  ggplot(aes(x = samp, y = log_samp)) + 
+  geom_line(color = "cyan3") +
+  geom_hline(yintercept = 2, 
+    linetype = "dashed", color = "darkseagreen1") + 
+  geom_hline(yintercept = max(logs$log_samp), 
+    linetype = "dashed", color = "cyan3") + 
+  annotate(geom = "text", 
+           label = "AIC penalty (k = 2)",
+           x = max(logs$samp) / 2, 
+           y = 3, 
+           color = "darkseagreen1") +
+  annotate(geom = "text", 
+           label = "BIC penalty (k = log(n))", 
+           x = max(logs$samp) / 2, 
+           y = .85 * max(logs$log_samp),
+           color = "cyan3") + 
+  labs(x = "Sample size", y = "Penalty parameter (k)") +
+  theme_dark()
+```
+
+## BIC is more conservative than AIC
+
+BIC increases logarithmically as $n\to\infty$
+
+```{r plot_logs_show}
+plot_logs
+```
+
+## Comparing models with parameters
+
+```{r model_comp}
+# REML = FALSE is necessary for comparing models
+# Update your final model with REML = TRUE
+null_mod <- lmer(RT ~ 1 + (1|subj/block),
+                 REML = FALSE, data = age_dat)
+
+main_block <- lmer(RT ~ block + (1|subj/block),
+                   REML = FALSE, data = age_dat)
+
+anova(null_mod, main_block)
+```
+
+## Fit remaining models in your design
+
+```{r mod_design}
+main_age <- lmer(RT ~ is_young + (1|subj/block),
+                 REML = FALSE, data = age_dat)
+
+additive <- lmer(RT ~ block + is_young + (1|subj/block),
+                 REML = FALSE, data = age_dat)
+
+full <- lmer(RT ~ block * is_young + (1|subj/block), 
+             REML = FALSE, data = age_dat)
+```
+
+## Compare models that incorporate block
+
+```{r block_comp}
+anova(null_mod, main_block, additive, full)
+```
+
+## Compare models that incorporate age
+
+```{r age_comp}
+anova(null_mod, main_age, additive, full)
+```
+
+## More compactly...
+
+```{r lmer_program}
+fixed_ef <- list("1", "block", "is_young", 
+              "block + is_young", "block * is_young")
+
+run_lmer <- function(fixed, x){
+  lmer(as.formula(paste0(
+    "RT ~ ", fixed, " + (1|subj/block)")), 
+    REML = FALSE, data = x
+  )
+}
+
+mod_list <- map(fixed_ef, run_lmer, age_dat)
+
+min_bic <- mod_list %>%
+  map_dbl(BIC) %>%
+  which.min()
+
+fixed_ef[[min_bic]]
+
+final_mod <- update(mod_list[[min_bic]], REML = TRUE)
+```
+
+# Basic linear algebra operations
+
+## Vector-vector products (dot products)
+
+Let $\mathbf{a}, \mathbf{b} \in \mathbb{R}^n$
+
+$\mathbf{a} \cdot \mathbf{b} = \sum_{i = 1}^n a_{i}b_{i}$
+
+$\mathbf{a}$ and $\mathbf{b}$ are orthogonal $\mathbf{iff}$ $\mathbf{a} \cdot \mathbf{b} = 0$
+
+$\mathbf{a}$ and $\mathbf{b}$ are orthonormal $\mathbf{iff}$ $\mathbf{a} \cdot \mathbf{b} = 0$, $\sqrt{\mathbf{a} \cdot \mathbf{a}} = 1$, 
+$\sqrt{\mathbf{b} \cdot \mathbf{b}} = 1$
+
+## Orthonormal vectors
+
+```{r on}
+# These two vectors are orthonormal
+vec_1 <- c(-.5, .5, -.5, .5)
+vec_2 <- c(.5, .5, .5, .5)
+
+vec_1 %*% vec_2
+sqrt(vec_1 %*% vec_1)
+sqrt(vec_2 %*% vec_2)
+```
+
+## Orthogonal vectors
+
+```{r og}
+# These two vectors are orthogonal but not normalized
+vec_1 <- c(-1, -1, 1, 1)
+vec_2 <- c(1, 1, 1, 1)
+
+vec_1 %*% vec_2
+sqrt(vec_1 %*% vec_1)
+sqrt(vec_2 %*% vec_2)
+```
+
+## Non-orthogonal vectors
+
+```{r non_og}
+# These two vectors are neither orthogonal nor normalized
+vec_1 <- c(-1, 1)
+vec_2 <- c(1, -1)
+
+vec_1 %*% vec_2
+sqrt(vec_1 %*% vec_1)
+sqrt(vec_2 %*% vec_2)
+```
+
+## Matrix-vector products
+
+Let $\mathbf{A} \in \mathbf{M}_{m , n}$, $\mathbf{b} \in \mathbb{R}^n$
+
+$$\mathbf{A} = \left[\begin{array}
+{rrr}
+a_{11} & a_{12} & \dots &  a_{1n} \\
+a_{21} & a_{22} & ... & a_{2n} \\
+\vdots & \vdots & \ddots & \vdots \\
+a_{m1} & a_{m2} & \dots & a_{mn}
+\end{array}\right] = \left[\begin{array}
+{rrr}
+\mathbf{a_{1}} & \mathbf{a_{2}} & \dots &  \mathbf{a_{n}} \end{array}\right]$$
+
+$$\mathbf{b} = \left[\begin{array}
+{rrr}
+b_{1}  \\
+b_{2}  \\
+\vdots \\
+b_{n} 
+\end{array}\right]$$
+
+$\mathbf{Ab} = b_{1}\mathbf{a_1} + b_{2}\mathbf{a_2} + \dots + b_{n}\mathbf{a_n}$ 
+
+where $\mathbf{Ab} \in \mathbb{R}^m$
+
+## Matrix-vector multiplication in R
+
+```{r mat_vec}
+A <- matrix(c(1, 2, 3,
+                 4, 5, 6), nrow = 2, byrow = TRUE)
+b <- c(1, 0, 1)
+
+# This won't work!
+# A %*% c(-1, 1) 
+
+A %*% b
+```
+
+## Matrix-matrix products
+
+Let $\mathbf{A} \in \mathbf{M}_{m , n}$, $\mathbf{B} \in \mathbf{M}_{n , k}$
+
+$$\mathbf{A} = \left[\begin{array}
+{rrr}
+a_{11} & a_{12} & \dots &  a_{1n} \\
+a_{21} & a_{22} & ... & a_{2n} \\
+\vdots & \vdots & \ddots & \vdots \\
+a_{m1} & a_{m2} & \dots & a_{mn}
+\end{array}\right] = \left[\begin{array}
+{rrr}
+\mathbf{a_{1}} & \mathbf{a_{2}} & \dots &  \mathbf{a_{n}} \end{array}\right]$$
+
+$$\mathbf{B} = \left[\begin{array}
+{rrr}
+b_{11} & b_{12} & \dots &  b_{1k} \\
+b_{21} & b_{22} & ... & b_{2k} \\
+\vdots & \vdots & \ddots & \vdots \\
+b_{n1} & b_{n2} & \dots & b_{nk}
+\end{array}\right] = \left[\begin{array}
+{rrr}
+\mathbf{b_{1}} & \mathbf{b_{2}} & \dots &  \mathbf{b_{k}} \end{array}\right]$$
+
+$$\mathbf{AB} = \left[\begin{array}
+{rrr}
+\mathbf{A}\mathbf{b_1} & \mathbf{A}\mathbf{b_2} & \dots & \mathbf{A}\mathbf{b_k}\end{array}\right]$$
+
+where $\mathbf{AB} \in M_{m, k}$
+
+## Matrix-matrix multiplication in R
+
+```{r mat_mat}
+A <- matrix(c(1, 2,
+              4, 5,
+              7, 8), nrow = 3, byrow = TRUE)
+
+B <- matrix(c(1, 2, 3, 4,
+              2, 4, 6, 8), nrow = 2, byrow = TRUE)
+res <- A %*% B
+# This won't work
+# B %*% A
+res
+A %*% B[, 1]
+```
+
+## Determinant formulas (2x2 and 3x3)
+
+For the general Matrix $\mathbf{X} \in \mathbf{M}_n$:
+
+$\{\mathbf{x_1}, \mathbf{x_2}, \dots, \mathbf{x_n}\}$ are linearly independent $\mathbf{iff}$ $det(\mathbf{X}) \neq 0$
+
+$$\mathbf{A} = \left[\begin{array}
+{rrr}
+a & b \\
+c & d\end{array}\right]$$
+
+$$det(\mathbf{A}) = \begin{vmatrix}
+\mathbf{A}\end{vmatrix} = ad - bc$$
+
+$$\mathbf{B} = \left[\begin{array}
+{rrr}
+a & b & c \\
+d & e & f \\
+g & h & i\end{array}\right]$$
+
+$$\begin{vmatrix}
+\mathbf{B}\end{vmatrix} = 
+a\begin{vmatrix}
+e & f \\
+h & i\end{vmatrix}
+- b\begin{vmatrix}
+d & f \\
+g & i\end{vmatrix}
++ c\begin{vmatrix}
+d & e \\
+g & h\end{vmatrix}$$
+
+## 2 x 2 determinants in R
+
+```{r det2}
+two <- matrix(c(-5, 12,
+                7,  32), nrow = 2, byrow = TRUE)
+(two[1, 1] * two[2, 2]) - (two[1, 2] * two[2, 1])
+
+det(two)
+```
+
+## 3 x 3 determinants in R
+
+```{r det3}
+three <- matrix(c(32, 98, 12,
+                  47, 11, 22,
+                  32, 28, 11), nrow = 3, byrow = TRUE)
+
+three[1, 1] * ((three[2, 2] * three[3, 3]) - (three[2, 3] * three[3, 2])) -
+three[1, 2] * ((three[2, 1] * three[3, 3]) - (three[2, 3] * three[3, 1])) +
+three[1, 3] * ((three[2, 1] * three[3, 2]) - (three[2, 2] * three[3, 1]))
+
+det(three)
+```
+
+## Lab 11 Activity
+
+-Return to the activities for Lab 9 and Lab 10. 
+
+1) Add follow-up tests with the appropriate multiple comparison procedure for each of the models. 
+
+2) Generate a plot of the parameters for each model.
+
+# Now it's your turn!
+
+Collaborate with your peers to write code. 
+
+I am available for programming questions.
