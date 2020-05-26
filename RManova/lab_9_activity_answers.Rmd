@@ -1,0 +1,96 @@
+---
+title: "PSYC 7720 Lab" 
+subtitle: "Lab 9 Activity"
+author: "Andrew Graves, Department of Psychology, University of Virginia"
+output:
+  pdf_document: default
+---
+
+## Directions:
+
+A.	Download the mccarthyData.csv. This is hypothetical data from 12 children who took the McCarthy Scales of Children's Abilites (MSCA) test at 30, 36, 42, and 48 months. The DV is the age-normed general cognitive score from the MSCA.
+B.	Answer the following questions and save the code you used in an R script.
+C.	You have until the end of lab to complete.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE, fig.height = 4)
+```
+
+```{r init}
+library(tidyverse)
+library(ez)
+library(emmeans)
+options(contrasts = c("contr.sum","contr.poly"))
+theme_set(theme_classic())
+```
+
+## Questions:
+
+1. Convert the mccarthyData from wide format to long format. Name the first column *id*, the second column *month*, the third column *mcsa*, and the dataframe *long_data*. Print the head and the dimensions of the long data.
+
+```{r 1}
+long_data <- read_csv("mccarthyData.csv") %>%
+  rownames_to_column(var = "id") %>%
+  pivot_longer(-id, names_to = "month", values_to = "mcsa") %>%
+  mutate(id = factor(id),
+         month = factor(month, ordered = TRUE))
+head(long_data)
+dim(long_data)
+```
+
+2. Run and interpret the results of an RM ANOVA using aov.
+
+```{r 2}
+aov_mod <- aov(mcsa ~ month + Error(id/month), data = long_data)
+summary(aov_mod)
+```
+
+- *Month* is a significant predictor of *mcsa*.
+
+3. Run and interpret the results of an RM ANOVA using ezANOVA.
+
+```{r 3}
+ez_mod <- ezANOVA(data = long_data,
+                  dv = mcsa,
+                  within = month,
+                  wid = id,
+                  type = 3,
+                  return_aov = TRUE,
+                  detailed = TRUE
+        )
+ez_mod
+
+# Check the residuals for normality
+resid <- proj(ez_mod$aov)[[3]][, "Residuals"]
+
+resid %>%
+  tibble() %>%
+  ggplot(aes(sample = `.`)) + 
+  geom_qq() + 
+  stat_qq_line() +
+  labs(x = "Theoretical Quantiles",
+       y = "Sample Quantiles")
+
+# If we were to follow-up... although in this 
+# case after correction technically the effect 
+# is not significant.
+follow_up <- contrast(
+  emmeans(ez_mod$aov, ~ month),
+          method = "poly",
+          adjust = "bonferroni"
+  )
+follow_up
+
+ez_plot <- ezPlot(
+  data = long_data,
+  dv = mcsa,
+  wid = id,
+  within = month,
+  x = month,
+  x_lab = "Month",
+  y_lab = "MCSA"
+  )
+ez_plot
+```
+
+- After Greenhouse-Geisser correction due to violations of sphericity, *month* is not a significant predictor of *mcsa*. However, if we had planned a linear contrast across months, we could haved specifically tested the polynomial contrasts (or just the linear contrast if we had strong theory). In this case, after Bonferonni correction, there was a positive significant linear trend on *mcsa* across *months*. 

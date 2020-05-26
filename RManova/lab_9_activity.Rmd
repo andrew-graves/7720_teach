@@ -1,0 +1,41 @@
+---
+title: "PSYC 7720 Lab" 
+subtitle: "Lab 9 Activity"
+author: "Andrew Graves, Department of Psychology, University of Virginia"
+output:
+  pdf_document: default
+---
+
+## Directions:
+
+A.	Download the mccarthyData.csv. This is hypothetical data from 12 children who took the McCarthy Scales of Children's Abilites (MSCA) test at 30, 36, 42, and 48 months. The DV is the age-normed general cognitive score from the MSCA.
+B.	Answer the following questions and save the code you used in an R script.
+C.	You have until the end of lab to complete.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, eval = FALSE, warning = FALSE, message = FALSE, fig.height = 4)
+```
+
+```{r init}
+
+```
+
+## Questions:
+
+1. Convert the mccarthyData from wide format to long format. Name the first column *id*, the second column *month*, the third column *mcsa*, and the dataframe *long_data*. Print the head and the dimensions of the long data.
+
+```{r 1}
+
+```
+
+2. Run and interpret the results of an RM ANOVA using aov.
+
+```{r 2}
+
+```
+
+3. Run and interpret the results of an RM ANOVA using ezANOVA.
+
+```{r 3}
+ 
+```

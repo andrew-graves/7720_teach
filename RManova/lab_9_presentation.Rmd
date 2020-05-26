@@ -1,0 +1,206 @@
+---
+title: "Lab 9"
+author: "Andrew Graves"
+date: "March 26/27 2020"
+output:
+  ioslides_presentation:
+    smaller: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.height = 3.5)
+```
+
+# Introduction to RM ANOVA in R
+
+## The sleepstudy dataset
+
+```{r sleepstudy}
+library(tidyverse)
+library(ez)
+library(lme4)
+theme_set(theme_classic())
+theme_update(text = element_text(family = "serif"))
+
+# Making sure we have ANOVA-appropriate contrasts:
+options(contrasts = c("contr.sum","contr.poly"))
+
+# The average reaction time per day for subjects in a sleep deprivation study. 
+# On day 0 the subjects had their normal amount of sleep. Starting that night 
+# they were restricted to 3 hours of sleep per night. The observations 
+# represent the average reaction time on a series of tests given each 
+# day to each subject.
+
+# Run ?sleepstudy for more information
+data(sleepstudy)
+str(sleepstudy)
+```
+
+## Create a time factor (Period) at lower resolution for demonstration purposes
+
+```{r period}
+period <- rep(c(1:5), 
+              times = nrow(sleepstudy) / length(unique(sleepstudy$Days)), 
+              each = length(unique(sleepstudy$Days)) / 5
+              )
+
+dat <- sleepstudy %>%
+  mutate(Period = factor(period,
+                      ordered = TRUE),
+         Days = factor(sleepstudy$Days, ordered = TRUE)
+  )
+
+str(dat)
+```
+
+# RM ANOVA on Days
+
+## Ensuring the Days contrasts are orthogonal
+
+```{r orthog_days}
+dat$Days %>%
+  contrasts() %>%
+  cor() %>% # sub cor() w/ crossprod() if you would like to check orthonormality
+  round(3)
+```
+
+## Exploratory Plot (Days vs. Reaction for each Subject)
+
+```{r plot1}
+day_plot <- dat %>%
+  ggplot(aes(x = Days, y = Reaction, group = 1)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color = "purple") +
+  facet_wrap(~Subject, nrow = 3)
+```
+
+## Subjects have daily measurements
+
+```{r day_plot}
+day_plot
+```
+
+## Use aov and Error for RM ANOVA on Days
+
+```{r aov_days}
+# Base r solution
+aov_days <- aov(Reaction~Days + Error(Subject/Days), 
+                  data = dat)
+summary(aov_days)
+```
+
+## Use ezANOVA for RM ANOVA on Days
+
+```{r ez_days}
+# ez package solution (checks for violations of sphericity)
+# ----------
+# This DOES NOT throw a warning because there is a single measurement for each
+# Subject * Day combination
+ez_days <- ezANOVA(data = dat, dv = .(Reaction),
+                  within = .(Days), wid = .(Subject),
+                  detailed = TRUE)
+ez_days
+```
+
+# RM ANOVA on Period
+
+## Ensuring the Period contrasts are orthogonal
+
+```{r orthog_period}
+dat$Period %>%
+  contrasts() %>%
+  cor() %>% # sub cor() w/ crossprod() if you would like to check orthonormality
+  round(3)
+```
+
+## Exploratory Plot (Period vs. Reaction for each Subject)
+
+```{r plot2}
+period_plot <- dat %>%
+  ggplot(aes(x = Period, y = Reaction, group = 1)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color = "purple") + 
+  facet_wrap(~Subject, nrow = 3)
+```
+
+## Looking at our recoded factor, Period
+
+```{r period_plot}
+period_plot
+```
+
+## Use aov and Error for RM ANOVA on Period
+
+```{r aov_period}
+aov_period <- aov(Reaction~Period + Error(Subject/Period), 
+               data = dat)
+summary(aov_period)
+```
+
+## Use ezANOVA for RM ANOVA on Period
+
+```{r ez_period, warning = TRUE}
+# This throws a warning because there are multiple measurements for each
+# Subject * Period combination. RM ANOVA requires single measurement for each
+# combination of within-subjects factors
+ez_period <- ezANOVA(data = dat, dv = .(Reaction),
+                  within = .(Period), wid = .(Subject),
+                  detailed = TRUE)
+```
+
+## Aggregate the data before running a traditional RM ANOVA
+
+```{r data_grp}
+dat_grp <- dat %>%
+  group_by(Period, Subject) %>%
+  summarize(Reaction = mean(Reaction))
+
+# Now model the aggregate data
+ez_grp <- ezANOVA(data = dat_grp, dv = .(Reaction),
+                     within = .(Period), wid = .(Subject),
+                     detailed = TRUE)
+```
+
+## View the ezANOVA output for aggregated period
+
+```{r view_output}
+ez_grp
+```
+
+# Looking ahead... the wonderful world of lmer
+
+## lmer (linear mixed effects regression)
+
+```{r lmer}
+# The following model will not run because there is no covariance matrix to
+# estimate in the model (i.e., no variance of days within subjects)
+#lmer(Reaction ~ Days + (1|Subject/Days), data = dat)
+
+# lmer expects unaggragated data, to model the means AND covariances of 
+# parameters. Note that this is the opposite of the traditional RM ANOVA.
+# Traditional RM ANOVA expects aggregated subject * condition data!
+lmer_period <- lmer(Reaction ~ Period + (1|Subject/Period), data = dat)
+summary(lmer_period)$coefficients
+```
+
+## Comparing lmer results to RM ANOVA results
+
+```{r comp_res}
+(ez_f <- ez_period$ANOVA %>%
+  filter(Effect == "Period") %>%
+  select(`F`) %>%
+  pull())
+
+(lmer_t <- summary(lmer_period)$coefficients[-1, "t value"]^2 %>%
+  mean())
+
+round(ez_f, 2) == round(lmer_t, 2)
+```
+
+# Now it's your turn!
+
+Download the in-class activity and answer the questions as best you can. 
+
+Collaborate with your peers to write code. 
+
+I am available for programming questions.
