@@ -1,0 +1,112 @@
+---
+title: "Lab 13"
+author: "Andrew Graves"
+date: "April 23/24 2020"
+output:
+  ioslides_presentation:
+    smaller: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.height = 3.5)
+```
+
+# Specification of random-effects structures with lmer
+
+## Load the data
+
+```{r load}
+library(tidyverse)
+library(haven) # For reading SPSS files
+library(lmerTest) 
+# lmerTest is a direct wrapper for lme4; it provides approximate df
+# which often can help diagnose model specifiation problems
+options(contrasts = c("contr.sum","contr.poly"))
+
+# Set a reasonable optimizer
+my_opt <- lmerControl(optimizer = "bobyqa",
+                      optCtrl = list(maxfun = 2e6))
+
+# The popularity dataset contains characteristics of pupils in different classes
+# Borrowed from this blogpost: https://www.rensvandeschoot.com/tutorials/lme4/
+dat <- read_sav(file = 
+  paste0("https://github.com/MultiLevelAnalysis",
+         "/Datasets-third-edition-Multilevel-book/blob/master",
+         "/chapter%202/popularity/SPSS/popular2.sav?raw=true")
+  ) %>%
+  select(pupil:popular) %>%
+  mutate_at(vars(extrav, texp, popular), scale) %>%
+  mutate_at(vars(pupil, class), factor) %>%
+  mutate(sex = factor(case_when(
+    sex == 0 ~ "boy",
+    TRUE ~ "girl"
+  ))) %>%
+  mutate_if(is.numeric, as.vector)
+```
+
+## Explore the data structure
+
+```{r str}
+glimpse(dat)
+```
+
+## One-way RM ANOVA style
+
+```{r mod0}
+mod0 <- lmer(popular ~ extrav + (1|class/extrav), 
+            data = dat, REML = FALSE, control = my_opt)
+summary(mod0)$coefficients
+```
+
+## Lmer style with random slopes (analagous to latent-growth curve)
+
+```{r mod1}
+mod1 <- update(mod0, formula = popular ~ extrav + (extrav|class))
+summary(mod1)$coefficients
+head(ranef(mod1)[[1]])
+```
+
+## Remove the intercept and just keep the slope
+
+```{r mod2}
+mod2 <- update(mod0, formula = popular ~ extrav + (0 + extrav|class))
+summary(mod2)$coefficients
+head(ranef(mod2)[[1]])
+```
+
+## Remove the correlation between the slope and intercept
+
+```{r mod3}
+mod3 <- update(mod0, formula = popular ~ extrav + (extrav||class))
+summary(mod3)$coefficients
+head(ranef(mod3)[[1]])
+```
+
+## Model comparison
+
+```{r mod_comp}
+anova(mod0, mod1, mod2, mod3)
+```
+
+## We can fit various types of models
+
+```{r vary}
+mod4 <- update(mod0, formula = popular ~ extrav + (extrav + sex|class))
+
+set.seed(42)
+mod5 <- lmer(formula = popular ~ extrav + sex + (extrav + sex|class),
+             data = dat, REML = FALSE,
+             lmerControl(optimizer = "nmkbw",
+                         optCtrl = list(maxfun = 2e6)))
+set.seed(42)
+mod6 <- update(mod5, formula = popular ~ extrav + sex + texp + 
+              (extrav + sex|class))
+```
+
+# Now it's your turn!
+
+Download the in-class activity and answer the questions as best you can. 
+
+Collaborate with your peers to write code. 
+
+I am available for programming questions.

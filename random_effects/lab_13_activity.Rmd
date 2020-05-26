@@ -1,0 +1,52 @@
+---
+title: "PSYC 7720 Lab" 
+subtitle: "Lab 13 Activity"
+author: "Andrew Graves, Department of Psychology, University of Virginia"
+output:
+  pdf_document: default
+---
+
+## Directions:
+
+A.	Download the **Pixel** dataset from the *nlme* package in R. Call ?Pixel at the R console to obtain more information about this dataset. You will be fitting various random effects structures with the *lmerTest* package in R, which is a direct wrapper of the *lme4* package we have been using up until this point. The outcome variable will be *pixel* for each model, and the observational unit will be *dog*. Call ranef() on the model for each question. Do your best to handle convergence warnings if you receive them.
+B.	Answer the following questions and save the code you used in an R script.
+C.	You have until the end of lab to complete.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, eval = FALSE, warning = FALSE, message = FALSE, fig.height = 4)
+```
+
+```{r init}
+```
+
+## Questions:
+
+1. In exactly two function calls, make all the column names of **Pixel** lowercase, and rename the dataset **dat**. For review, specify a repeated measurements two-way ANOVA with *side* and *day* as the repeated measurements "factors" (keep *day* as numeric for convergence purposes).
+
+```{r 1}
+```
+
+2. Specify additive fixed effects of *day* and *side*. Specify a random slope for *day* and a random intercept for *dog*. Make sure *day* is numeric.
+
+```{r 2}
+```
+
+3. Fit the same model from 2, but do not estimate the correlation between the random slope and random intercept.
+
+```{r 3}
+```
+
+4. Fit the same model from 2, but remove the random intercept entirely.
+
+```{r 4}
+```
+
+5. Which out of the models from questions 2 through 4 is most conservative and why?
+
+```{r 5}
+```
+
+6. Redo the procedures from  questions 2 through 5, but specify random slopes for *day* **AND** *side*.
+
+```{r 6}
+```
