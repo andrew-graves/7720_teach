@@ -1,6 +1,6 @@
 # PSYC 7720: Quantitative Methods II (Experimental Design)
 
-### This repository contains RMarkdown lab materials I designed-- including code, presentations, and activities.
+### This repository contains RMarkdown lab materials I designed-- including data, code, presentations, and activities.
 
 #### University of Virginia, Spring 2020
 
