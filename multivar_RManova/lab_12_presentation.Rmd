@@ -1,0 +1,173 @@
+---
+title: "Lab 12"
+author: "Andrew Graves"
+date: "April 16/17 2020"
+output:
+  ioslides_presentation:
+    smaller: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.height = 3.5)
+```
+
+# Introduction to Multivariate approach to RM ANOVA in R
+
+## Load the data
+
+```{r load}
+library(tidyverse)
+library(car)
+
+# Making sure we have ANOVA-appropriate contrasts:
+options(contrasts = c("contr.sum","contr.poly"))
+
+# Hypothetical data regarding the role of 
+# premature births on the growth of newborn
+# infants. Infants were weighed at the same 
+# time of day for 4 consecutive days.
+baby_dat <- read_csv("baby_weights.csv") %>%
+  mutate(Premature, factor(Premature))
+
+# Same angle and noise data from Lab 10 
+# activity, but with the added between-subject 
+# factor of doing the task either in a dark or 
+# bright room
+rt_dat <- read_csv("angle_noise_lighting_data.csv") %>%
+  mutate(lighting = factor(lighting))
+```
+
+## Explore the data structure
+
+```{r str}
+glimpse(baby_dat)
+glimpse(rt_dat)
+```
+
+# One-way multivariate RM ANOVA
+
+## Dependent-variable matrix for the one-way model
+
+```{r build_mod1a}
+# Dependent-variable matrix
+dvs_1 <- baby_dat %>%
+  select(Day1:Day4)
+
+# The model
+lm(as.matrix(dvs_1) ~ 1)
+```
+
+## The names of the within-subjects factors as well as the design for the one-way model
+```{r build_mod1b}
+# The names of the factors
+data.frame(days = names(dvs_1))
+
+# The RM design
+~days
+```
+
+## Use car's Anova function to build the one-way model
+
+```{r run_mod1}
+mod1 <- car::Anova(mod = 
+           lm(as.matrix(dvs_1) ~ 1),
+           idata = data.frame(days =
+           names(dvs_1)),
+           idesign = ~days,
+           type = 3
+           )
+summ_mod1 <- summary(mod1)
+```
+
+## View car's Anova solution for days effect
+
+```{r mod1_soln}
+summ_mod1$multivariate.tests$days
+```
+
+# Two-way multivariate RM ANOVA
+
+## Dependent-variable matrix for the two-way model
+
+```{r build_mod2a}
+# Dependent-variable matrix
+dvs_2 <- rt_dat %>%
+  select(abs0:pres8)
+
+# The model
+lm(as.matrix(dvs_2) ~ 1)
+```
+
+## The names of the within-subjects factors as well as the design for the two-way model
+
+```{r build_mod2b}
+# The names of the factors; multiple ways to 
+# do this!
+dv_names <- str_split(names(dvs_2), "s",
+                      simplify = TRUE)
+
+colnames(dv_names) <- c("noise", "angle")
+
+# The RM design
+~noise * angle
+```
+
+## Use car's Anova function to build the two-way model
+
+```{r run_mod2}
+mod2 <- car::Anova(mod = lm(as.matrix(dvs_2) ~ 1),
+                  idata = data.frame(dv_names),
+                  idesign = ~ noise * angle,
+                  type = 3
+)
+summ_mod2 <- summary(mod2)
+```
+
+## View car's Anova solution for noise effect
+
+```{r mod2_soln1}
+summ_mod2$multivariate.tests$noise
+```
+
+## Now angle...
+
+```{r mod2_soln2}
+summ_mod2$multivariate.tests$angle
+```
+
+## Now noise x angle interaction...
+
+```{r mod2_soln3}
+summ_mod2$multivariate.tests$`noise:angle`
+```
+
+# Adding a between-subjects factor for multivariate RM ANOVA
+
+## Build the full interaction model
+
+```{r build_mod3}
+mod3 <- car::Anova(
+  mod = 
+    lm(cbind(
+      abs0, abs4, abs8, pres0, pres4, pres8) ~ 
+        lighting, data = rt_dat),
+        idata = data.frame(dv_names),
+        idesign = ~ noise * angle, 
+        type = 3
+)
+summ_mod3 <- summary(mod3)
+```
+
+## View car's Anova solution for three-way interaction
+
+```{r mod3_soln}
+summ_mod3$multivariate.tests$`lighting:noise:angle`
+```
+
+# Now it's your turn!
+
+Download the in-class activity and answer the questions as best you can. 
+
+Collaborate with your peers to write code. 
+
+I am available for programming questions.

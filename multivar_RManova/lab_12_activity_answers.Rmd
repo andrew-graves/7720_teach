@@ -1,0 +1,71 @@
+---
+title: "PSYC 7720 Lab" 
+subtitle: "Lab 12 Activity"
+author: "Andrew Graves, Department of Psychology, University of Virginia"
+output:
+  pdf_document: default
+---
+
+## Directions:
+
+A.	Download the taste_data.csv. This is a two-factor within subjects design with an additional between subjects factor (similar to a split-plot design). In this simulated data, participants were given 6 fruits that tasted either sweet, sour, or bitter as well as either round or angular in shape. They were then asked to give each fruit a rating between 0 (threatening) and 100 (pleasant). Half the participants completed the task at breakfast time, while the other half completed the task at lunch time.
+B.	Answer the following questions and save the code you used in an R script.
+C.	You have until the end of lab to complete.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE, fig.height = 4)
+```
+
+```{r init}
+library(tidyverse)
+
+dat <- read_csv('taste_data.csv') %>%
+  mutate(Meal_Time)
+
+dvs <- dat %>%
+  select(Sweet_Round:Bitter_Angular)
+
+dv_names <- str_split(names(dvs), "_", simplify = TRUE)
+colnames(dv_names) <- c("taste", "shape")
+```
+
+## Questions:
+
+1. To practice, run a one-way multivariate RM ANOVA on taste, ignoring the shape of the fruit.
+
+```{r 1}
+mod1 <- car::Anova(mod = lm(as.matrix(dvs) ~ 1),
+                   idata = data.frame(dv_names),
+                   idesign = ~ taste,
+                   type = 3
+)
+mod1
+```
+
+2. Run the more appropriate analysis here, the full two-way multivariate RM ANOVA on taste and shape. Interpret the results of the omnibus test.
+
+```{r 2}
+mod2 <- car::Anova(mod = lm(as.matrix(dvs) ~ 1),
+                   idata = data.frame(dv_names),
+                   idesign = ~ taste * shape,
+                   type = 3
+)
+mod2
+```
+
+- There was a significant *taste* x *shape* two-way interaction, so follow-up tests are necessary to interpet how the effect of *taste* on fruit ratings varies by the *shape* of the fruit. However, the question only asked for interpretation of the omnibus test.
+
+3. Finally, run the same model as question 2 but add the between-subject factor *Meal_Time*. Interpret the results of the omnibus test.
+
+```{r 3}
+mod3 <- car::Anova(mod = 
+  lm(cbind(Sweet_Round, Sweet_Angular, Sour_Round, Sour_Angular, 
+           Bitter_Round, Bitter_Angular) ~ Meal_Time, data = dat),
+                  idata = data.frame(dv_names),
+                  idesign = ~ taste * shape,
+                  type = 3
+)
+mod3
+```
+ 
+ - There was no significant *meal time* x *taste* x *shape* three-way interaction. There was a significant *taste* x *shape* two-way interaction, so follow-up tests are necessary to interpet how the effect of *taste* on fruit ratings varies by the *shape* of the fruit. However, the question only asked for interpretation of the omnibus test.
